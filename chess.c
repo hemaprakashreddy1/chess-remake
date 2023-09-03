@@ -1,10 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 void display_number_board(int *board);
 void print_piece_name(int piece);
 void display_name_board(int *board);
 
-const int KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 7;
+const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 7;
 const int WHITE = 8, BLACK = 16;
 
 int piece_color(int piece)
@@ -99,8 +100,8 @@ int fen_char_to_number(char ch)
 
 void init_fen_board(int *board, char *fen)
 {
-    int row = 0;
-    int col = 0;
+    int rank = 7;
+    int file = 0;
 
     for(int i = 0; fen[i] != '\0'; i++)
     {
@@ -110,24 +111,100 @@ void init_fen_board(int *board, char *fen)
         }
         else if(fen[i] == '/')
         {
-            row++;
-            col = 0;
+            rank--;
+            file = 0;
         }
         else if(fen[i] >= '1' && fen[i] <= '8')
         {
-            int target = col + fen[i] - '0';
-            while(col < target)
+            int target = file + fen[i] - '0';
+            while(file < target)
             {
-                board[row * 8 + col] = 0;
-                col++;
+                board[rank * 8 + file] = 0;
+                file++;
             }
         }
         else
         {
-            board[row * 8 + col] = fen_char_to_number(fen[i]);
-            col++;
+            board[rank * 8 + file] = fen_char_to_number(fen[i]);
+            file++;
         }
     }
+}
+
+char number_to_fen_char(int piece)
+{
+    int color = piece_color(piece);
+    int type = piece_type(piece);
+
+    if(type == PAWN)
+    {
+        return color == WHITE ? 'P' : 'p';
+    }
+    else if(type == KNIGHT)
+    {
+        return color == WHITE ? 'N' : 'n';
+    }
+    else if(type == BISHOP)
+    {
+        return color == WHITE ? 'B' : 'b';
+    }
+    else if(type == ROOK)
+    {
+        return color == WHITE ? 'R' : 'r';
+    }
+    else if(type == QUEEN)
+    {
+        return color == WHITE ? 'Q' : 'q';
+    }
+    else if(type == KING)
+    {
+        return color == WHITE ? 'K' : 'k';
+    }
+    else
+    {
+        printf("unknown type %d\n", type);
+        return 0;
+    }
+}
+
+char* generate_fen(int *board)
+{
+    char *fen = (char *)malloc(sizeof(char) * 100);
+    int fen_index = 0;
+    int empty_piece_count;
+
+    for(int rank = 7; rank >= 0; rank--)
+    {
+        empty_piece_count = 0;
+        for(int file = 0; file <= 7; file++)
+        {
+            int piece = board[rank * 8 + file];
+            if( piece != EMPTY)
+            {
+                if(empty_piece_count != 0)
+                {
+                    fen[fen_index++] = empty_piece_count + '0';
+                    empty_piece_count = 0;
+                }
+                fen[fen_index++] = number_to_fen_char(piece);
+            }
+            else
+            {
+                empty_piece_count++;
+            }
+        }
+        if(empty_piece_count != 0)
+        {
+            fen[fen_index++] = empty_piece_count + '0';
+        }
+        if(rank != 0)
+        {
+            fen[fen_index++] = '/';
+        }
+    }
+
+    fen[fen_index] = '\0';
+    return fen;
 }
 
 int main()
@@ -135,16 +212,19 @@ int main()
     int board[64];
     init_fen_board(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     display_name_board(board);
+    char *fen = generate_fen(board);
+    printf("%s\n", fen);
+    free(fen);
     return 0;
 }
 
 void display_number_board(int *board)
 {
-    for(int i = 0; i < 8; i++)
+    for(int rank = 7; rank >= 0; rank--)
     {
-        for(int j = 0; j < 8; j++)
+        for(int file = 0; file <= 7; file++)
         {
-            printf("%d ", board[i * 8 + j]);
+            printf("%d ", board[rank * 8 + file]);
         }
         printf("\n");
     }
@@ -202,12 +282,12 @@ void display_name_board(int *board)
         printf("%d\t", i);
     }
     printf("\n\n\n");
-    for(int i = 0; i < 8; i++)
+    for(int rank = 7; rank >= 0; rank--)
     {
-        printf("%d\t", i);
-        for(int j = 0; j < 8; j++)
+        printf("%d\t", rank);
+        for(int file = 0; file < 8; file++)
         {
-            print_piece_name(board[i * 8 + j]);
+            print_piece_name(board[rank * 8 + file]);
         }
         printf("\n\n");
     }
