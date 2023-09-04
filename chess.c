@@ -7,6 +7,7 @@ void display_name_board(int *board);
 
 const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 7;
 const int WHITE = 8, BLACK = 16;
+const int N = 8, E = 1, W = -1, S = -8, NE = 9, NW = 7, SE = -7, SW = -9;
 
 int piece_color(int piece)
 {
@@ -207,14 +208,52 @@ char* generate_fen(int *board)
     return fen;
 }
 
+int min(int a, int b)
+{
+    return a > b ? b : a;
+}
+
+void generate_steps_to_edges(int array[][8])
+{
+    int north, east, west, south, north_east, north_west, south_east, south_west;
+    int index;
+
+    for(int rank = 0; rank <= 7; rank++)
+    {
+        for(int file = 0; file <= 7; file++)
+        {
+            north = 7 - rank;
+            east = 7 - file;
+            west = file;
+            south = rank;
+            north_east = min(north, east);
+            north_west = min(north, west);
+            south_east = min(south, west);
+            south_west = min(south, west);
+            index = rank * 8 + file;
+            array[index][0] = north;
+            array[index][1] = east;
+            array[index][2] = west;
+            array[index][3] = south;
+            array[index][4] = north_east;
+            array[index][5] = north_west;
+            array[index][6] = south_east;
+            array[index][7] = south_west;
+        }
+    }
+}
+
 int main()
 {
     int board[64];
+    int distance_to_borders[64][8];
+    generate_steps_to_edges(distance_to_borders);
     init_fen_board(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     display_name_board(board);
     char *fen = generate_fen(board);
     printf("%s\n", fen);
     free(fen);
+    printf("%d", 0 + N);
     return 0;
 }
 
