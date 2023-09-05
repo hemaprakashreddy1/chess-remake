@@ -1,11 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+struct piece_list
+{
+    int max_pieces[7];
+    int no_of_pieces[7];
+    int *list[7];
+};
+
 void display_number_board(int *board);
 void print_piece_name(int piece);
 void display_name_board(int *board);
 
-const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 7;
+const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 6;
 const int WHITE = 8, BLACK = 16;
 const int N = 8, E = 1, W = -1, S = -8, NE = 9, NW = 7, SE = -7, SW = -9;
 
@@ -243,17 +250,86 @@ void generate_steps_to_edges(int array[][8])
     }
 }
 
+void init_piece_list(struct piece_list *p_list, int *board)
+{
+    p_list[0].max_pieces[KING] = p_list[1].max_pieces[KING] = 1;
+
+    for(int i = 1; i < 7; i++)
+    {
+        p_list[0].no_of_pieces[i] = p_list[1].no_of_pieces[i] = 0;
+        p_list[0].max_pieces[i] = p_list[1].max_pieces[i] = 10;
+        p_list[0].list[i] = (int *)malloc(sizeof(int) * p_list[0].max_pieces[i]);
+        p_list[1].list[i] = (int *)malloc(sizeof(int) * p_list[1].max_pieces[i]);
+        if(p_list[0].list[i] == NULL || p_list[1].list[i] == NULL)
+        {
+            printf("memory not allocated\n");
+        }
+    }
+
+    int color, type, piece;
+    for(int rank = 0; rank <= 7; rank++)
+    {
+        for(int file = 0; file <= 7; file++)
+        {
+            piece = board[rank * 8 + file];
+            if(piece != EMPTY)
+            {
+                color = piece_color(piece);
+                type = piece_type(piece);
+                if(color == WHITE)
+                {
+                    p_list[0].list[type][p_list[0].no_of_pieces[type]++] = rank * 8 + file;
+                }
+                else
+                {
+                    p_list[1].list[type][p_list[1].no_of_pieces[type]++] = rank * 8 + file;
+                }
+            }
+        }
+    }
+}
+
+void display_piece_list(struct piece_list *p_list)
+{
+    for(int type = 1; type < 7; type++)
+    {
+        int *arr = p_list->list[type];
+        int no_of_pieces = p_list->no_of_pieces[type];
+        printf("%d = ", type);
+        for(int j = 0; j < no_of_pieces; j++)
+        {
+            printf("%d ", arr[j]);
+        }
+        printf("\n");
+    }
+}
+
+void free_piece_list(struct piece_list *p_list)
+{
+    for(int i = 1; i < 7; i++)
+    {
+        free(p_list->list[i]);
+    }
+}
+
 int main()
 {
     int board[64];
     int distance_to_borders[64][8];
+    struct piece_list p_list[2];
     generate_steps_to_edges(distance_to_borders);
     init_fen_board(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     display_name_board(board);
     char *fen = generate_fen(board);
     printf("%s\n", fen);
     free(fen);
-    printf("%d", 0 + N);
+    
+    init_piece_list(p_list, board);
+    display_piece_list(&p_list[0]);
+    display_piece_list(&p_list[1]);
+    free_piece_list(&p_list[0]);
+    free_piece_list(&p_list[1]);
+
     return 0;
 }
 
