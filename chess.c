@@ -8,6 +8,15 @@ struct piece_list
     int *list[7];
 };
 
+struct chess_game
+{
+    int board[64];
+    char fen[100];
+    struct piece_list white_piece_list;
+    struct piece_list black_piece_list;
+    int distance_to_borders[64][8];
+};
+
 void display_number_board(int *board);
 void print_piece_name(int piece);
 void display_name_board(int *board);
@@ -106,7 +115,7 @@ int fen_char_to_number(char ch)
     }
 }
 
-void init_fen_board(int *board, char *fen)
+void init_board_from_fen(int *board, char *fen)
 {
     int rank = 7;
     int file = 0;
@@ -175,9 +184,11 @@ char number_to_fen_char(int piece)
     }
 }
 
-char* generate_fen(int *board)
+void generate_fen(struct chess_game *game)
 {
-    char *fen = (char *)malloc(sizeof(char) * 100);
+    int *board = game->board;
+    char *fen = game->fen;
+
     int fen_index = 0;
     int empty_piece_count;
 
@@ -212,7 +223,6 @@ char* generate_fen(int *board)
     }
 
     fen[fen_index] = '\0';
-    return fen;
 }
 
 int min(int a, int b)
@@ -250,17 +260,21 @@ void generate_steps_to_edges(int array[][8])
     }
 }
 
-void init_piece_list(struct piece_list *p_list, int *board)
+void init_piece_list(struct chess_game *game)
 {
-    p_list[0].max_pieces[KING] = p_list[1].max_pieces[KING] = 1;
+    int *board = game->board;
+    struct piece_list *white_piece_list = &game->white_piece_list;
+    struct piece_list *black_piece_list = &game->black_piece_list;
+
+    white_piece_list->max_pieces[KING] = black_piece_list->max_pieces[KING] = 1;
 
     for(int i = 1; i < 7; i++)
     {
-        p_list[0].no_of_pieces[i] = p_list[1].no_of_pieces[i] = 0;
-        p_list[0].max_pieces[i] = p_list[1].max_pieces[i] = 10;
-        p_list[0].list[i] = (int *)malloc(sizeof(int) * p_list[0].max_pieces[i]);
-        p_list[1].list[i] = (int *)malloc(sizeof(int) * p_list[1].max_pieces[i]);
-        if(p_list[0].list[i] == NULL || p_list[1].list[i] == NULL)
+        white_piece_list->no_of_pieces[i] = black_piece_list->no_of_pieces[i] = 0;
+        white_piece_list->max_pieces[i] = black_piece_list->max_pieces[i] = 10;
+        white_piece_list->list[i] = (int *)malloc(sizeof(int) * white_piece_list->max_pieces[i]);
+        black_piece_list->list[i] = (int *)malloc(sizeof(int) * black_piece_list->max_pieces[i]);
+        if(white_piece_list->list[i] == NULL || black_piece_list->list[i] == NULL)
         {
             printf("memory not allocated\n");
         }
@@ -278,11 +292,11 @@ void init_piece_list(struct piece_list *p_list, int *board)
                 type = piece_type(piece);
                 if(color == WHITE)
                 {
-                    p_list[0].list[type][p_list[0].no_of_pieces[type]++] = rank * 8 + file;
+                    white_piece_list->list[type][white_piece_list->no_of_pieces[type]++] = rank * 8 + file;
                 }
                 else
                 {
-                    p_list[1].list[type][p_list[1].no_of_pieces[type]++] = rank * 8 + file;
+                    black_piece_list->list[type][black_piece_list->no_of_pieces[type]++] = rank * 8 + file;
                 }
             }
         }
@@ -314,22 +328,19 @@ void free_piece_list(struct piece_list *p_list)
 
 int main()
 {
-    int board[64];
-    int distance_to_borders[64][8];
-    struct piece_list p_list[2];
-    generate_steps_to_edges(distance_to_borders);
-    init_fen_board(board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
-    display_name_board(board);
-    char *fen = generate_fen(board);
-    printf("%s\n", fen);
-    free(fen);
-    
-    init_piece_list(p_list, board);
-    display_piece_list(&p_list[0]);
-    display_piece_list(&p_list[1]);
-    free_piece_list(&p_list[0]);
-    free_piece_list(&p_list[1]);
+    struct chess_game game;
+    generate_steps_to_edges(game.distance_to_borders);
+    init_board_from_fen(game.board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
+    display_name_board(game.board);
+    generate_fen(&game);
+    printf("%s\n", game.fen);
 
+    init_piece_list(&game);
+    display_piece_list(&game.white_piece_list);
+    display_piece_list(&game.black_piece_list);
+
+    free_piece_list(&game.white_piece_list);
+    free_piece_list(&game.black_piece_list);
     return 0;
 }
 
