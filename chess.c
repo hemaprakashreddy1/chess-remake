@@ -5,21 +5,42 @@ struct piece_list
 {
     int max_pieces[7];
     int no_of_pieces[7];
-    int *list[7];
+    int list[7][10];
 };
 
 struct chess_game
 {
     int board[64];
+    int turn;
     char fen[100];
     struct piece_list white_piece_list;
     struct piece_list black_piece_list;
     int distance_to_borders[64][8];
 };
 
+struct move
+{
+    int src;
+    int dest;
+};
+
+struct node
+{
+    struct move *mv;
+    struct node *next;
+};
+
+struct queue
+{
+    struct node *front;
+    struct node *rear;
+};
+
 void display_number_board(int *board);
 void print_piece_name(int piece);
 void display_name_board(int *board);
+void generate_sliding_moves(struct chess_game *game, int positon, struct queue *q);
+void generate_knight_moves(struct chess_game *game, int positon, struct queue *q);
 
 const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 6;
 const int WHITE = 8, BLACK = 16;
@@ -33,6 +54,129 @@ int piece_color(int piece)
 int piece_type(int piece)
 {
     return piece & 7;
+}
+
+int is_valid_position(int position)
+{
+    return position >= 0 && position <= 63;
+}
+
+int file(int position)
+{
+    return position % 8;
+}
+
+int rank(int position)
+{
+    return position / 8;
+}
+
+struct move* intit_move(int source, int dest)
+{
+    struct move *new = (struct move*)malloc(sizeof(struct move));
+    if(new == NULL)
+    {
+        printf("memory not allocated\n");
+        return NULL;
+    }
+    new->src = source;
+    new->dest = dest;
+    return new;
+}
+
+struct node* init_node(struct move *mv)
+{
+    struct node *new = (struct node*)malloc(sizeof(struct node));
+    if(mv == NULL)
+    {
+        return NULL;
+    }
+    if(new == NULL)
+    {
+        printf("memory not allocated\n");
+        return NULL;
+    }
+
+    new->mv = mv;
+    new->next = NULL;
+    return new;
+}
+
+struct queue* init_queue()
+{
+    struct queue *new = (struct queue*)malloc(sizeof(struct queue));
+    if(new == NULL)
+    {
+        printf("memory not allocated\n");
+        return NULL;
+    }
+    new->front = new->rear = NULL;
+    return new;
+}
+
+void enqueue(struct queue *q, struct node *new)
+{
+    if(new == NULL)
+    {
+        return;
+    }
+    if(q->front == NULL)
+    {
+        q->front = q->rear = new;
+    }
+    else
+    {
+        q->rear->next = new;
+        q->rear = new;
+    }
+}
+
+struct move* dequeue(struct queue *q)
+{
+    struct node *temp;
+    if(q->front == NULL)
+    {
+        return NULL;
+    }
+    else if(q->front == q->rear)
+    {
+        temp = q->front;
+        q->front = q->rear = NULL;
+    }
+    else
+    {
+        temp = q->front;
+        q->front = q->front->next;
+    }
+
+    struct move *mv = temp->mv;
+    free(temp);
+    return mv;
+}
+
+void display_queue(struct queue *q)
+{
+    struct node *front = q->front;
+
+    while(front != NULL)
+    {
+        printf("src %d dest %d\n", front->mv->src, front->mv->dest);
+        front = front->next;
+    }
+}
+
+void free_queue(struct queue *q)
+{
+    struct node *front= q->front;
+    struct node *temp;
+    while(front != NULL)
+    {
+        free(front->mv);
+        temp = front;
+        front = front->next;
+        free(temp);
+    }
+    free(q);
 }
 
 void init_board(int *board)
@@ -221,7 +365,6 @@ void generate_fen(struct chess_game *game)
             fen[fen_index++] = '/';
         }
     }
-
     fen[fen_index] = '\0';
 }
 
@@ -267,17 +410,17 @@ void init_piece_list(struct chess_game *game)
     struct piece_list *black_piece_list = &game->black_piece_list;
 
     white_piece_list->max_pieces[KING] = black_piece_list->max_pieces[KING] = 1;
+    white_piece_list->max_pieces[QUEEN] = black_piece_list->max_pieces[QUEEN] = 9;
+    white_piece_list->max_pieces[PAWN] = black_piece_list->max_pieces[PAWN] = 8;
+
+    for(int i = 3; i < 6; i++)
+    {
+        white_piece_list->max_pieces[i] = black_piece_list->max_pieces[i] = 10;
+    }
 
     for(int i = 1; i < 7; i++)
     {
         white_piece_list->no_of_pieces[i] = black_piece_list->no_of_pieces[i] = 0;
-        white_piece_list->max_pieces[i] = black_piece_list->max_pieces[i] = 10;
-        white_piece_list->list[i] = (int *)malloc(sizeof(int) * white_piece_list->max_pieces[i]);
-        black_piece_list->list[i] = (int *)malloc(sizeof(int) * black_piece_list->max_pieces[i]);
-        if(white_piece_list->list[i] == NULL || black_piece_list->list[i] == NULL)
-        {
-            printf("memory not allocated\n");
-        }
     }
 
     int color, type, piece;
@@ -309,7 +452,7 @@ void display_piece_list(struct piece_list *p_list)
     {
         int *arr = p_list->list[type];
         int no_of_pieces = p_list->no_of_pieces[type];
-        printf("%d = ", type);
+        printf("type %d, np %d = ", type, no_of_pieces);
         for(int j = 0; j < no_of_pieces; j++)
         {
             printf("%d ", arr[j]);
@@ -318,29 +461,174 @@ void display_piece_list(struct piece_list *p_list)
     }
 }
 
-void free_piece_list(struct piece_list *p_list)
+int is_sliding_piece(int type)
 {
-    for(int i = 1; i < 7; i++)
+    return type == BISHOP || type == ROOK || type == QUEEN;
+}
+
+struct queue* generate_moves(struct chess_game *game)
+{
+    struct queue* q = init_queue();
+    if(q == NULL)
     {
-        free(p_list->list[i]);
+        return NULL;
     }
+    
+    struct piece_list *p_list;
+    if(game->turn == WHITE)
+    {
+        p_list = &game->white_piece_list;
+    }
+    else
+    {
+        p_list = &game->black_piece_list;
+    }
+
+    int no_of_pieces;
+    int *pieces_index;
+    for(int type = 1; type < 7; type++)
+    {
+        no_of_pieces = p_list->no_of_pieces[type];
+        if(no_of_pieces == 0)
+        {
+            continue;
+        }
+        pieces_index = p_list->list[type];
+        
+        if(is_sliding_piece(type))
+        {
+            for(int j = 0; j < no_of_pieces; j++)
+            {
+                generate_sliding_moves(game, pieces_index[j], q);
+            }
+        }
+        else if(type == KNIGHT)
+        {
+            for(int j = 0; j < no_of_pieces; j++)
+            {
+                generate_knight_moves(game, pieces_index[j], q);
+            }
+        }
+    }
+    return q;
+}
+
+void generate_sliding_moves(struct chess_game *game, int position, struct queue *q)
+{
+    int directions[] = {N, E, W, S, NE, NW, SE, SW};
+    int *board = game->board;
+    int type = piece_type(board[position]);
+    int start_direction, end_direction;
+
+    if(type == ROOK)
+    {
+        start_direction = 0;
+        end_direction = 3;
+    }
+    else if(type == BISHOP)
+    {
+        start_direction = 4;
+        end_direction = 7;
+    }
+    else if(type == QUEEN)
+    {
+        start_direction = 0;
+        end_direction = 7;
+    }
+
+    int no_of_steps, direction, current_position;
+    for(int i = start_direction; i <= end_direction; i++)
+    {
+        no_of_steps = game->distance_to_borders[position][i];
+        direction = directions[i];
+        current_position = position;
+        for(int j = 0; j < no_of_steps; j++)
+        {
+            current_position += direction;
+            if(board[current_position] != EMPTY)
+            {
+                if(piece_color(board[current_position]) != game->turn)
+                {
+                    enqueue(q, init_node(intit_move(position, current_position)));
+                }
+                break;
+            }
+            enqueue(q, init_node(intit_move(position, current_position)));
+        }
+    }
+}
+
+void generate_knight_moves(struct chess_game *game, int pos, struct queue *q)//
+{
+    int r = rank(pos);
+    int f = file(pos);
+    int turn_color = game->turn;
+    int dest;
+
+    dest = pos + S + S + E;
+    if(r > 1 && f < 7 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + N + N + E;
+    if(r < 6 && f < 7 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + N + N + W;
+    if(r < 6 && f > 0 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + S + S + W;
+    if(r > 1 && f > 0 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + S + E + E;
+    if(r > 0 && f < 6 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + N + E + E;
+    if(r < 7 && f < 6 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + N + W + W;
+    if(r < 7 && f > 1 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+    dest = pos + S + W + W;
+    if(r > 0 && f > 1 && (piece_color(game->board[dest]) != turn_color))
+    {
+        enqueue(q, init_node(intit_move(pos, dest)));
+    }
+}
+
+void init_chess_game(struct chess_game *game, char *fen)
+{
+    generate_steps_to_edges(game->distance_to_borders);
+    init_board_from_fen(game->board, fen);
+    init_piece_list(game);
+    generate_fen(game);
 }
 
 int main()
 {
     struct chess_game game;
-    generate_steps_to_edges(game.distance_to_borders);
-    init_board_from_fen(game.board, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
+    game.turn = WHITE;
+    char fen[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+    // char fen[] = "8/8/8/8/4N3/8/8/RB6";
+    init_chess_game(&game, fen);
     display_name_board(game.board);
-    generate_fen(&game);
     printf("%s\n", game.fen);
-
-    init_piece_list(&game);
     display_piece_list(&game.white_piece_list);
     display_piece_list(&game.black_piece_list);
-
-    free_piece_list(&game.white_piece_list);
-    free_piece_list(&game.black_piece_list);
+    struct queue* q = generate_moves(&game);
+    display_queue(q);
+    free_queue(q);
     return 0;
 }
 
