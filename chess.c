@@ -41,6 +41,7 @@ void print_piece_name(int piece);
 void display_name_board(int *board);
 void generate_sliding_moves(struct chess_game *game, int positon, struct queue *q);
 void generate_knight_moves(struct chess_game *game, int positon, struct queue *q);
+void generate_king_moves(struct chess_game *game, int position, struct queue *q);
 
 const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 6;
 const int WHITE = 8, BLACK = 16;
@@ -388,7 +389,7 @@ void generate_steps_to_edges(int array[][8])
             south = rank;
             north_east = min(north, east);
             north_west = min(north, west);
-            south_east = min(south, west);
+            south_east = min(south, east);
             south_west = min(south, west);
             index = rank * 8 + file;
             array[index][0] = north;
@@ -509,6 +510,10 @@ struct queue* generate_moves(struct chess_game *game)
                 generate_knight_moves(game, pieces_index[j], q);
             }
         }
+        else if(type == KING)
+        {
+            generate_king_moves(game, pieces_index[0], q);
+        }
     }
     return q;
 }
@@ -607,6 +612,21 @@ void generate_knight_moves(struct chess_game *game, int pos, struct queue *q)//
     }
 }
 
+void generate_king_moves(struct chess_game *game, int position, struct queue *q)
+{
+    int directions[] = {N, E, W, S, NE, NW, SE, SW};
+    int *board = game->board;
+
+    for(int i = 0; i <= 7; i++)
+    {
+        int dest = position + directions[i];
+        if(game->distance_to_borders[position][i] > 0 && piece_color(board[dest]) != game->turn)
+        {
+            enqueue(q, init_node(intit_move(position, dest)));
+        }
+    }
+}
+
 void init_chess_game(struct chess_game *game, char *fen)
 {
     generate_steps_to_edges(game->distance_to_borders);
@@ -620,7 +640,7 @@ int main()
     struct chess_game game;
     game.turn = WHITE;
     char fen[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-    // char fen[] = "8/8/8/8/4N3/8/8/RB6";
+    // char fen[] = "8/8/8/8/R7/8/8/8";
     init_chess_game(&game, fen);
     display_name_board(game.board);
     printf("%s\n", game.fen);
