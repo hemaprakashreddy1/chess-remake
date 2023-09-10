@@ -16,6 +16,7 @@ struct chess_game
     struct piece_list white_piece_list;
     struct piece_list black_piece_list;
     int distance_to_borders[64][8];
+    struct move *last_move;
 };
 
 struct move
@@ -42,6 +43,7 @@ void display_name_board(int *board);
 void generate_sliding_moves(struct chess_game *game, int positon, struct queue *q);
 void generate_knight_moves(struct chess_game *game, int positon, struct queue *q);
 void generate_king_moves(struct chess_game *game, int position, struct queue *q);
+void generate_pawn_moves(struct chess_game *game, int position, struct queue *q);
 
 const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN = 6;
 const int WHITE = 8, BLACK = 16;
@@ -72,7 +74,7 @@ int rank(int position)
     return position / 8;
 }
 
-struct move* intit_move(int source, int dest)
+struct move* init_move(int source, int dest)
 {
     struct move *new = (struct move*)malloc(sizeof(struct move));
     if(new == NULL)
@@ -514,6 +516,13 @@ struct queue* generate_moves(struct chess_game *game)
         {
             generate_king_moves(game, pieces_index[0], q);
         }
+        else if(type == PAWN)
+        {
+            for(int j = 0; j < no_of_pieces; j++)
+            {
+                generate_pawn_moves(game, pieces_index[j], q);
+            }
+        }
     }
     return q;
 }
@@ -554,11 +563,11 @@ void generate_sliding_moves(struct chess_game *game, int position, struct queue 
             {
                 if(piece_color(board[current_position]) != game->turn)
                 {
-                    enqueue(q, init_node(intit_move(position, current_position)));
+                    enqueue(q, init_node(init_move(position, current_position)));
                 }
                 break;
             }
-            enqueue(q, init_node(intit_move(position, current_position)));
+            enqueue(q, init_node(init_move(position, current_position)));
         }
     }
 }
@@ -573,42 +582,42 @@ void generate_knight_moves(struct chess_game *game, int pos, struct queue *q)//
     dest = pos + S + S + E;
     if(r > 1 && f < 7 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + N + N + E;
     if(r < 6 && f < 7 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + N + N + W;
     if(r < 6 && f > 0 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + S + S + W;
     if(r > 1 && f > 0 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + S + E + E;
     if(r > 0 && f < 6 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + N + E + E;
     if(r < 7 && f < 6 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + N + W + W;
     if(r < 7 && f > 1 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
     dest = pos + S + W + W;
     if(r > 0 && f > 1 && (piece_color(game->board[dest]) != turn_color))
     {
-        enqueue(q, init_node(intit_move(pos, dest)));
+        enqueue(q, init_node(init_move(pos, dest)));
     }
 }
 
@@ -622,7 +631,62 @@ void generate_king_moves(struct chess_game *game, int position, struct queue *q)
         int dest = position + directions[i];
         if(game->distance_to_borders[position][i] > 0 && piece_color(board[dest]) != game->turn)
         {
-            enqueue(q, init_node(intit_move(position, dest)));
+            enqueue(q, init_node(init_move(position, dest)));
+        }
+    }
+}
+
+void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
+{
+    int color = game->turn;
+    int rnk = rank(position);
+    int fle = file(position);
+    int *board = game->board;
+
+    if(color == WHITE)
+    {
+        int north = position + N;
+        int north_east = position + NE;
+        int north_west = position + NW;
+
+        if(rnk < 7 && board[north] == EMPTY)
+        {
+            enqueue(q, init_node(init_move(position, north)));
+        }
+        if(rnk == 1 && (board[north + N] == EMPTY))
+        {
+            enqueue(q, init_node(init_move(position, north + N)));
+        }
+        if(rnk < 7 && fle < 7 && (piece_color(board[north_east]) == BLACK))
+        {
+            enqueue(q, init_node(init_move(position, north_east)));
+        }
+        if(rnk < 7 && fle > 0 && (piece_color(board[north_west]) == BLACK))
+        {
+            enqueue(q, init_node(init_move(position, north_west)));
+        }
+    }
+    else
+    {
+        int south = position + S;
+        int south_east = position + SE;
+        int south_west = position + SW;
+
+        if(rnk > 0 && (board[south] == EMPTY))
+        {
+            enqueue(q, init_node(init_move(position, south)));
+        }
+        if(rnk == 6 && (board[south + S] == EMPTY))
+        {
+            enqueue(q, init_node(init_move(position, south + S)));
+        }
+        if(rnk > 0 && fle > 7 &&(piece_color(board[south_east]) == WHITE))
+        {
+            enqueue(q, init_node(init_move(position, south_east)));
+        }
+        if(rnk > 0 && fle > 0 && (piece_color(board[south_west]) == WHITE))
+        {
+            enqueue(q, init_node(init_move(position, south_west)));
         }
     }
 }
@@ -639,8 +703,9 @@ int main()
 {
     struct chess_game game;
     game.turn = WHITE;
+    // game.turn = BLACK;
     char fen[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-    // char fen[] = "8/8/8/8/R7/8/8/8";
+    // char fen[] = "8/p7/8/8/8/8/P7/8";
     init_chess_game(&game, fen);
     display_name_board(game.board);
     printf("%s\n", game.fen);
