@@ -8,6 +8,12 @@ struct piece_list
     int list[7][10];
 };
 
+struct fen
+{
+    char piece_placement[100];
+    int turn;
+};
+
 struct chess_game
 {
     int board[64];
@@ -368,6 +374,18 @@ void generate_fen(struct chess_game *game)
             fen[fen_index++] = '/';
         }
     }
+
+    fen[fen_index++] = ' ';
+    
+    if(game->turn == BLACK)
+    {
+        fen[fen_index++] = 'b';
+    }
+    else
+    {
+        fen[fen_index++] = 'w';
+    }
+
     fen[fen_index] = '\0';
 }
 
@@ -691,10 +709,40 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
     }
 }
 
-void init_chess_game(struct chess_game *game, char *fen)
+void init_fen(struct fen *fn, char *fen_string)
 {
+    char *piece_placement = fn->piece_placement;
+
+    int piece_index = 0;
+    for(; fen_string[piece_index] != '\0' && fen_string[piece_index] != ' '; piece_index++)
+    {
+        piece_placement[piece_index] =  fen_string[piece_index];
+    }
+    piece_placement[piece_index] = '\0';
+
+    if(fen_string[piece_index] == '\0')
+    {
+        fn->turn = WHITE;
+        return;
+    }
+
+    char turn = fen_string[++piece_index];
+    
+    if(turn == 'b')
+    {
+        fn->turn = BLACK;
+    }
+    else
+    {
+        fn->turn = WHITE;
+    }
+}
+
+void init_chess_game(struct chess_game *game, struct fen *fn)
+{
+    game->turn = fn->turn;
     generate_steps_to_edges(game->distance_to_borders);
-    init_board_from_fen(game->board, fen);
+    init_board_from_fen(game->board, fn->piece_placement);
     init_piece_list(game);
     generate_fen(game);
 }
@@ -702,11 +750,11 @@ void init_chess_game(struct chess_game *game, char *fen)
 int main()
 {
     struct chess_game game;
-    game.turn = WHITE;
-    // game.turn = BLACK;
-    char fen[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-    // char fen[] = "8/p7/8/8/8/8/P7/8";
-    init_chess_game(&game, fen);
+    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
+    struct fen fn;
+    init_fen(&fn, fen_string);
+    // char fen[] = "8/p7/8/8/8/8/P7/8 w";
+    init_chess_game(&game, &fn);
     display_name_board(game.board);
     printf("%s\n", game.fen);
     display_piece_list(&game.white_piece_list);
