@@ -29,6 +29,7 @@ struct move
 {
     int src;
     int dest;
+    int type;
 };
 
 struct node
@@ -55,6 +56,9 @@ const int EMPTY = 0, KING = 1, QUEEN = 2, ROOK = 3, BISHOP = 4, KNIGHT = 5, PAWN
 const int WHITE = 8, BLACK = 16;
 const int N = 8, E = 1, W = -1, S = -8, NE = 9, NW = 7, SE = -7, SW = -9;
 const int DIRECTIONS[] = {N, E, W, S, NE, NW, SE, SW};
+const int QUIET_MOVE = 0, DOUBLE_PAWN_PUSH = 1, KING_CASTLE = 2, QUEEN_CASTLE = 3, CAPTURES = 4,
+ENPASSANT_CAPTURE = 5, KNIGHT_PROMOTION = 8, BISHOP_PROMOTION = 9, ROOK_PROMOTION = 10, QUEEN_PROMOTION = 11,
+KNIGHT_PROMO_CAPTURE = 12, BISHOP_PROMO_CAPTURE = 13, ROOK_PROMO_CAPTURE = 14, QUEEN_PROMO_CAPTURE = 15;
 
 int piece_color(int piece)
 {
@@ -81,7 +85,7 @@ int rank(int position)
     return position / 8;
 }
 
-struct move* init_move(int source, int dest)
+struct move* init_move(int source, int dest, int type)
 {
     struct move *new = (struct move*)malloc(sizeof(struct move));
     if(new == NULL)
@@ -91,6 +95,7 @@ struct move* init_move(int source, int dest)
     }
     new->src = source;
     new->dest = dest;
+    new->type = type;
     return new;
 }
 
@@ -581,74 +586,86 @@ void generate_sliding_moves(struct chess_game *game, int position, struct queue 
             {
                 if(piece_color(board[current_position]) != game->turn)
                 {
-                    enqueue(q, init_node(init_move(position, current_position)));
+                    enqueue(q, init_node(init_move(position, current_position, CAPTURES)));
                 }
                 break;
             }
-            enqueue(q, init_node(init_move(position, current_position)));
+            enqueue(q, init_node(init_move(position, current_position, QUIET_MOVE)));
         }
     }
 }
 
 void generate_knight_moves(struct chess_game *game, int pos, struct queue *q)//
 {
+    int *board = game->board;
     int r = rank(pos);
     int f = file(pos);
     int turn_color = game->turn;
     int dest;
+    int move_type;
 
     dest = pos + S + S + E;
-    if(r > 1 && f < 7 && piece_color(game->board[dest]) != turn_color)
+    if(r > 1 && f < 7 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + N + N + E;
-    if(r < 6 && f < 7 && piece_color(game->board[dest]) != turn_color)
+    if(r < 6 && f < 7 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + N + N + W;
-    if(r < 6 && f > 0 && piece_color(game->board[dest]) != turn_color)
+    if(r < 6 && f > 0 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + S + S + W;
-    if(r > 1 && f > 0 && piece_color(game->board[dest]) != turn_color)
+    if(r > 1 && f > 0 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + S + E + E;
-    if(r > 0 && f < 6 && piece_color(game->board[dest]) != turn_color)
+    if(r > 0 && f < 6 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + N + E + E;
-    if(r < 7 && f < 6 && piece_color(game->board[dest]) != turn_color)
+    if(r < 7 && f < 6 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + N + W + W;
-    if(r < 7 && f > 1 && piece_color(game->board[dest]) != turn_color)
+    if(r < 7 && f > 1 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
     dest = pos + S + W + W;
-    if(r > 0 && f > 1 && piece_color(game->board[dest]) != turn_color)
+    if(r > 0 && f > 1 && piece_color(board[dest]) != turn_color)
     {
-        enqueue(q, init_node(init_move(pos, dest)));
+        move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+        enqueue(q, init_node(init_move(pos, dest, move_type)));
     }
 }
 
 void generate_king_moves(struct chess_game *game, int position, struct queue *q)
 {
     int *board = game->board;
+    int move_type;
 
     for(int i = 0; i <= 7; i++)
     {
         int dest = position + DIRECTIONS[i];
         if(game->distance_to_borders[position][i] > 0 && piece_color(board[dest]) != game->turn)
         {
-            enqueue(q, init_node(init_move(position, dest)));
+            move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
+            enqueue(q, init_node(init_move(position, dest, move_type)));
         }
     }
 }
@@ -668,19 +685,19 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
 
         if(rnk < 7 && board[north] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, north)));
+            enqueue(q, init_node(init_move(position, north, QUIET_MOVE)));
         }
         if(rnk == 1 && board[north] == EMPTY && board[north + N] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, north + N)));
+            enqueue(q, init_node(init_move(position, north + N, DOUBLE_PAWN_PUSH)));
         }
         if(rnk < 7 && fle < 7 && piece_color(board[north_east]) == BLACK)
         {
-            enqueue(q, init_node(init_move(position, north_east)));
+            enqueue(q, init_node(init_move(position, north_east, CAPTURES)));
         }
         if(rnk < 7 && fle > 0 && piece_color(board[north_west]) == BLACK)
         {
-            enqueue(q, init_node(init_move(position, north_west)));
+            enqueue(q, init_node(init_move(position, north_west, CAPTURES)));
         }
     }
     else
@@ -691,19 +708,19 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
 
         if(rnk > 0 && board[south] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, south)));
+            enqueue(q, init_node(init_move(position, south, QUIET_MOVE)));
         }
         if(rnk == 6 && board[south] == EMPTY && board[south + S] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, south + S)));
+            enqueue(q, init_node(init_move(position, south + S, DOUBLE_PAWN_PUSH)));
         }
         if(rnk > 0 && fle > 7 && piece_color(board[south_east]) == WHITE)
         {
-            enqueue(q, init_node(init_move(position, south_east)));
+            enqueue(q, init_node(init_move(position, south_east, CAPTURES)));
         }
         if(rnk > 0 && fle > 0 && piece_color(board[south_west]) == WHITE)
         {
-            enqueue(q, init_node(init_move(position, south_west)));
+            enqueue(q, init_node(init_move(position, south_west, CAPTURES)));
         }
     }
 }
