@@ -12,6 +12,8 @@ struct fen
 {
     char piece_placement[100];
     int turn;
+    int white_castle;
+    int black_castle;
 };
 
 struct chess_game
@@ -19,6 +21,8 @@ struct chess_game
     int board[64];
     int turn;
     char fen[100];
+    int white_castle;
+    int black_castle;
     struct piece_list white_piece_list;
     struct piece_list black_piece_list;
     int distance_to_borders[64][8];
@@ -351,6 +355,45 @@ void generate_fen(struct chess_game *game)
         fen[fen_index++] = 'w';
     }
 
+    fen[fen_index++] = ' ';
+
+    int white_castle = game->white_castle;
+    int black_castle = game->black_castle;
+    if(white_castle == 0 && black_castle == 0)
+    {
+        fen[fen_index++] = '-';
+    }
+    else
+    {
+        if(white_castle == 3)
+        {
+            fen[fen_index++] = 'K';
+            fen[fen_index++] = 'Q';
+        }
+        else if(white_castle == 2)
+        {
+            fen[fen_index++] = 'K';
+        }
+        else if(white_castle == 1)
+        {
+            fen[fen_index++] = 'Q';
+        }
+
+        if(black_castle == 3)
+        {
+            fen[fen_index++] = 'k';
+            fen[fen_index++] = 'q';
+        }
+        else if(black_castle == 2)
+        {
+            fen[fen_index++] = 'k';
+        }
+        else if(black_castle == 1)
+        {
+            fen[fen_index++] = 'q';
+        }
+    }
+
     fen[fen_index] = '\0';
 }
 
@@ -617,15 +660,39 @@ void generate_king_moves(struct chess_game *game, int position, struct queue *q)
 {
     int *board = game->board;
     int move_type;
+    int turn = game->turn;
 
     for(int i = 0; i <= 7; i++)
     {
         int dest = position + DIRECTIONS[i];
-        if(game->distance_to_borders[position][i] > 0 && piece_color(board[dest]) != game->turn)
+        if(game->distance_to_borders[position][i] > 0 && piece_color(board[dest]) != turn)
         {
             move_type = board[dest] == EMPTY ? QUIET_MOVE : CAPTURES;
             enqueue(q, init_node(init_move(position, dest, move_type)));
         }
+    }
+
+    int castle;
+    if(turn == WHITE)
+    {
+        castle = game->white_castle;
+    }
+    else
+    {
+        castle = game->black_castle;
+    }
+
+    if(castle == 0)
+    {
+        return;
+    }
+    if((castle & 2) == 2 && board[position + E] == EMPTY && board[position + E + E] == EMPTY)
+    {
+        enqueue(q, init_node(init_move(position, position + E + E, KING_CASTLE)));
+    }
+    if((castle & 1) == 1 && board[position + W] == EMPTY && board[position + W + W] == EMPTY)
+    {
+        enqueue(q, init_node(init_move(position, position + W + W, QUEEN_CASTLE)));
     }
 }
 
@@ -756,11 +823,45 @@ void init_fen(struct fen *fn, char *fen_string)
     {
         fn->turn = WHITE;
     }
+
+    piece_index += 2;
+
+    if(fen_string[piece_index] == '-')
+    {
+        fn->black_castle = fn->white_castle = 0;
+    }
+    else
+    {
+        int black_castle = 0, white_castle = 0;
+        for(; fen_string[piece_index] != '\0' && fen_string[piece_index] != ' '; piece_index++)
+        {
+            if(fen_string[piece_index] == 'K')
+            {
+                white_castle = white_castle | 2;
+            }
+            else if(fen_string[piece_index] == 'Q')
+            {
+                white_castle = white_castle | 1;
+            }
+            else if(fen_string[piece_index] == 'k')
+            {
+                black_castle = black_castle | 2;
+            }
+            else if(fen_string[piece_index] == 'q')
+            {
+                black_castle = black_castle | 1;
+            }
+        }
+        fn->black_castle = black_castle;
+        fn->white_castle = white_castle;
+    }
 }
 
 void init_chess_game(struct chess_game *game, struct fen *fn)
 {
     game->turn = fn->turn;
+    game->white_castle = fn->white_castle;
+    game->black_castle = fn->black_castle;
     generate_steps_to_edges(game->distance_to_borders);
     init_board_from_fen(game->board, fn->piece_placement);
     init_piece_list(game);
@@ -771,8 +872,9 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
 int main()
 {
     struct chess_game game;
-    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
-    // char fen_string[] = "8/8/8/4Pp2/8/8/8/8 w";
+    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk";
+    // char fen_string[] = "4k3/8/8/8/8/8/8/8 w KQk";
+
     struct fen fn;
     init_fen(&fn, fen_string);
     init_chess_game(&game, &fn);
