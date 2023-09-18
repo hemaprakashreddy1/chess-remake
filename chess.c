@@ -59,6 +59,7 @@ const int DIRECTIONS[] = {N, E, W, S, NE, NW, SE, SW};
 const int QUIET_MOVE = 0, DOUBLE_PAWN_PUSH = 1, KING_CASTLE = 2, QUEEN_CASTLE = 3, CAPTURES = 4,
 ENPASSANT_CAPTURE = 5, KNIGHT_PROMOTION = 8, BISHOP_PROMOTION = 9, ROOK_PROMOTION = 10, QUEEN_PROMOTION = 11,
 KNIGHT_PROMO_CAPTURE = 12, BISHOP_PROMO_CAPTURE = 13, ROOK_PROMO_CAPTURE = 14, QUEEN_PROMO_CAPTURE = 15;
+const char PIECE_SYMBOLS[] = {'\0', 'k', 'q', 'r', 'b', 'n', 'p'};
 
 int piece_color(int piece)
 {
@@ -218,62 +219,41 @@ void init_board(int *board)
 
 int fen_char_to_number(char ch)
 {
+    int color;
     if(ch >= 'A' && ch <= 'Z')
     {
-        if(ch == 'P')
-        {
-            return WHITE | PAWN;
-        }
-        else if(ch == 'N')
-        {
-            return WHITE | KNIGHT;
-        }
-        else if(ch == 'B')
-        {
-            return WHITE | BISHOP;
-        }
-        else if(ch == 'R')
-        {
-            return WHITE | ROOK;
-        }
-        else if(ch == 'Q')
-        {
-            return WHITE | QUEEN;
-        }
-        else if(ch == 'K')
-        {
-            return WHITE | KING;
-        }
-        return 0;
+        color = WHITE;
+        ch += 32;
     }
     else
     {
-        if(ch == 'p')
-        {
-            return BLACK | PAWN;
-        }
-        else if(ch == 'n')
-        {
-            return BLACK | KNIGHT;
-        }
-        else if(ch == 'b')
-        {
-            return BLACK | BISHOP;
-        }
-        else if(ch == 'r')
-        {
-            return BLACK | ROOK;
-        }
-        else if(ch == 'q')
-        {
-            return BLACK | QUEEN;
-        }
-        else if(ch == 'k')
-        {
-            return BLACK | KING;
-        }
-        return 0;
+        color = BLACK;
     }
+    if(ch == 'p')
+    {
+        return color | PAWN;
+    }
+    else if(ch == 'n')
+    {
+        return color | KNIGHT;
+    }
+    else if(ch == 'b')
+    {
+        return color | BISHOP;
+    }
+    else if(ch == 'r')
+    {
+        return color | ROOK;
+    }
+    else if(ch == 'q')
+    {
+        return color | QUEEN;
+    }
+    else if(ch == 'k')
+    {
+        return color | KING;
+    }
+    return 0;
 }
 
 void init_board_from_fen(int *board, char *fen)
@@ -314,35 +294,12 @@ char number_to_fen_char(int piece)
     int color = piece_color(piece);
     int type = piece_type(piece);
 
-    if(type == PAWN)
+    if(color == BLACK)
     {
-        return color == WHITE ? 'P' : 'p';
+        return PIECE_SYMBOLS[type];
     }
-    else if(type == KNIGHT)
-    {
-        return color == WHITE ? 'N' : 'n';
-    }
-    else if(type == BISHOP)
-    {
-        return color == WHITE ? 'B' : 'b';
-    }
-    else if(type == ROOK)
-    {
-        return color == WHITE ? 'R' : 'r';
-    }
-    else if(type == QUEEN)
-    {
-        return color == WHITE ? 'Q' : 'q';
-    }
-    else if(type == KING)
-    {
-        return color == WHITE ? 'K' : 'k';
-    }
-    else
-    {
-        printf("unknown type %d\n", type);
-        return 0;
-    }
+
+    return PIECE_SYMBOLS[type] - 32;
 }
 
 void generate_fen(struct chess_game *game)
