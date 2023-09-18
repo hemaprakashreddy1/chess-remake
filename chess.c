@@ -696,6 +696,33 @@ void generate_king_moves(struct chess_game *game, int position, struct queue *q)
     }
 }
 
+void add_pawn_promotions(int position, int dest, int captures, struct queue *q)
+{
+    enqueue(q, init_node(init_move(position, dest, QUEEN_PROMOTION | captures)));
+    enqueue(q, init_node(init_move(position, dest, ROOK_PROMOTION | captures)));
+    enqueue(q, init_node(init_move(position, dest, KNIGHT_PROMOTION | captures)));
+    enqueue(q, init_node(init_move(position, dest, BISHOP_PROMOTION | captures)));
+}
+
+void generate_promotion_moves(struct chess_game *game, int position, int direction, struct queue *q)
+{
+    int turn = game->turn;
+    int *board = game->board;
+    int fle = file(position);
+    if(board[position + direction]  == EMPTY)
+    {
+        add_pawn_promotions(position, position + direction, 0, q);
+    }
+    if(fle < 7 && board[position + direction + E] != EMPTY && piece_color(board[position + direction + E]) != turn)
+    {
+        add_pawn_promotions(position, position + direction + E, CAPTURES, q);
+    }
+    if(fle > 0 && board[position + direction + W] != EMPTY && piece_color(board[position + direction + W]) != turn)
+    {
+        add_pawn_promotions(position, position + direction + W, CAPTURES, q);
+    }
+}
+
 void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
 {
     int color = game->turn;
@@ -709,23 +736,28 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
         int north_east = position + NE;
         int north_west = position + NW;
 
-        if(rnk < 7 && board[north] == EMPTY)
+        if(rnk < 6 && board[north] == EMPTY)
         {
             enqueue(q, init_node(init_move(position, north, QUIET_MOVE)));
         }
+        if(rnk < 6 && fle < 7 && piece_color(board[north_east]) == BLACK)
+        {
+            enqueue(q, init_node(init_move(position, north_east, CAPTURES)));
+        }
+        if(rnk < 6 && fle > 0 && piece_color(board[north_west]) == BLACK)
+        {
+            enqueue(q, init_node(init_move(position, north_west, CAPTURES)));
+        }
+
         if(rnk == 1 && board[north] == EMPTY && board[north + N] == EMPTY)
         {
             enqueue(q, init_node(init_move(position, north + N, DOUBLE_PAWN_PUSH)));
         }
-        if(rnk < 7 && fle < 7 && piece_color(board[north_east]) == BLACK)
+        else if(rnk == 6)
         {
-            enqueue(q, init_node(init_move(position, north_east, CAPTURES)));
+            generate_promotion_moves(game, position, N, q);
         }
-        if(rnk < 7 && fle > 0 && piece_color(board[north_west]) == BLACK)
-        {
-            enqueue(q, init_node(init_move(position, north_west, CAPTURES)));
-        }
-        if(rnk == 4)
+        else if(rnk == 4)
         {
             struct move* last_move = game->last_move;
             if(last_move == NULL)
@@ -754,24 +786,28 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
         int south_east = position + SE;
         int south_west = position + SW;
 
-        if(rnk > 0 && board[south] == EMPTY)
+        if(rnk > 1 && board[south] == EMPTY)
         {
             enqueue(q, init_node(init_move(position, south, QUIET_MOVE)));
         }
-        if(rnk == 6 && board[south] == EMPTY && board[south + S] == EMPTY)
-        {
-            enqueue(q, init_node(init_move(position, south + S, DOUBLE_PAWN_PUSH)));
-        }
-        if(rnk > 0 && fle > 7 && piece_color(board[south_east]) == WHITE)
+        if(rnk > 1 && fle > 7 && piece_color(board[south_east]) == WHITE)
         {
             enqueue(q, init_node(init_move(position, south_east, CAPTURES)));
         }
-        if(rnk > 0 && fle > 0 && piece_color(board[south_west]) == WHITE)
+        if(rnk > 1 && fle > 0 && piece_color(board[south_west]) == WHITE)
         {
             enqueue(q, init_node(init_move(position, south_west, CAPTURES)));
         }
 
-        if(rnk == 3)
+        if(rnk == 6 && board[south] == EMPTY && board[south + S] == EMPTY)
+        {
+            enqueue(q, init_node(init_move(position, south + S, DOUBLE_PAWN_PUSH)));
+        }
+        else if(rnk == 1)
+        {
+            generate_promotion_moves(game, position, S, q);
+        }
+        else if(rnk == 3)
         {
             struct move* last_move = game->last_move;
             if(last_move == NULL)
@@ -872,8 +908,8 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
 int main()
 {
     struct chess_game game;
-    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk";
-    // char fen_string[] = "4k3/8/8/8/8/8/8/8 w KQk";
+    // char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk";
+    char fen_string[] = "8/6P1/8/8/8/8/8/8 w KQk";
 
     struct fen fn;
     init_fen(&fn, fen_string);
