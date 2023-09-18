@@ -172,12 +172,14 @@ struct move* dequeue(struct queue *q)
 void display_queue(struct queue *q)
 {
     struct node *front = q->front;
-
+    int count = 0;
     while(front != NULL)
     {
         printf("src %d dest %d\n", front->mv->src, front->mv->dest);
         front = front->next;
+        count++;
     }
+    printf("queue count %d\n", count);
 }
 
 void free_queue(struct queue *q)
@@ -699,6 +701,28 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
         {
             enqueue(q, init_node(init_move(position, north_west, CAPTURES)));
         }
+        if(rnk == 4)
+        {
+            struct move* last_move = game->last_move;
+            if(last_move == NULL)
+            {
+                return;
+            }
+            int last_move_type = last_move->type;
+            int last_dest = last_move->dest;
+            int last_fle = file(last_dest);
+            if(last_move_type == DOUBLE_PAWN_PUSH)
+            {
+                if(fle < 7 && last_fle > 0 && last_dest + W == position)
+                {
+                    enqueue(q, init_node(init_move(position, position + NE, ENPASSANT_CAPTURE)));
+                }
+                if(fle > 0 && last_fle < 7 && last_dest + E == position)
+                {
+                    enqueue(q, init_node(init_move(position, position + NW, ENPASSANT_CAPTURE)));
+                }
+            }
+        }
     }
     else
     {
@@ -721,6 +745,29 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
         if(rnk > 0 && fle > 0 && piece_color(board[south_west]) == WHITE)
         {
             enqueue(q, init_node(init_move(position, south_west, CAPTURES)));
+        }
+
+        if(rnk == 3)
+        {
+            struct move* last_move = game->last_move;
+            if(last_move == NULL)
+            {
+                return;
+            }
+            int last_move_type = last_move->type;
+            int last_dest = last_move->dest;
+            int last_fle = file(last_dest);
+            if(last_move_type == DOUBLE_PAWN_PUSH)
+            {
+                if(fle < 7 && last_fle > 0 && last_dest + W == position)
+                {
+                    enqueue(q, init_node(init_move(position, position + SE, ENPASSANT_CAPTURE)));
+                }
+                if(fle > 0 && last_fle < 7 && last_dest + E == position)
+                {
+                    enqueue(q, init_node(init_move(position, position + SW, ENPASSANT_CAPTURE)));
+                }
+            }
         }
     }
 }
@@ -761,13 +808,14 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
     init_board_from_fen(game->board, fn->piece_placement);
     init_piece_list(game);
     generate_fen(game);
+    game->last_move = NULL;
 }
 
 int main()
 {
     struct chess_game game;
-    // char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
-    char fen_string[] = "rnbqkbnr/8/8/8/8/8/8/1N6 w";
+    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w";
+    // char fen_string[] = "8/8/8/4Pp2/8/8/8/8 w";
     struct fen fn;
     init_fen(&fn, fen_string);
     init_chess_game(&game, &fn);
