@@ -8,6 +8,12 @@ struct piece_list
     int list[7][10];
 };
 
+struct captured_pieces
+{
+    int pieces[32];
+    int top;
+};
+
 struct fen
 {
     char piece_placement[100];
@@ -27,6 +33,7 @@ struct chess_game
     struct piece_list black_piece_list;
     int distance_to_borders[64][8];
     struct move *last_move;
+    struct captured_pieces captured_piece_list;
 };
 
 struct move
@@ -199,6 +206,32 @@ void free_queue(struct queue *q)
         free(temp);
     }
     free(q);
+}
+
+void add_captured_piece(struct captured_pieces *cp, int piece)
+{
+    if(cp->top == 31)
+    {
+        printf("stack overflow");
+    }
+    else
+    {
+        cp->pieces[++(cp->top)] = piece;
+    }
+}
+
+int last_captured_piece(struct captured_pieces *cp)
+{
+    int piece = 0;
+    if(cp->top == -1)
+    {
+        printf("stack underflow");
+    }
+    else
+    {
+        piece = cp->pieces[(cp->top)--];
+    }
+    return piece;
 }
 
 void init_board(int *board)
@@ -475,17 +508,70 @@ void init_piece_list(struct chess_game *game)
     }
 }
 
+void update_piece_index(struct piece_list *p_list, int piece_type, struct move* mv)
+{
+    int no_of_pieces = p_list->no_of_pieces[piece_type];
+    int *pieces = p_list->list[piece_type];
+    int src = mv->src;
+
+    int updated = 0;
+    for(int i = 0; i < no_of_pieces; i++)
+    {
+        if(pieces[i] == src)
+        {
+            pieces[i] = mv->dest;
+            updated = 1;
+            break;
+        }
+    }
+    if(!updated)
+    {
+        printf("piece list not updated for mv src - %d, dest - %d\n", mv->src, mv->dest);
+    }
+}
+
+void add_piece_index(struct piece_list *p_list, int piece_type, int index)
+{
+    p_list->list[piece_type][p_list->no_of_pieces[piece_type]++] = index;
+}
+
+void remove_piece_index(struct piece_list *p_list, int piece_type, int index)
+{
+    int no_of_pieces = p_list->no_of_pieces[piece_type];
+    int *pieces = p_list->list[piece_type];
+    int last_piece_index = pieces[no_of_pieces - 1];
+    int removed = 0;
+
+    for(int i = 0; i < no_of_pieces; i++)
+    {
+        if(pieces[i] == index)
+        {
+            pieces[i] = last_piece_index;
+            p_list->no_of_pieces[piece_type]--;
+            removed = 1;
+            break;
+        }
+    }
+
+    if(!removed)
+    {
+        printf("piece index %d not removed from piece list\n", index);
+    }
+}
+
 void display_piece_list(struct piece_list *p_list)
 {
     for(int type = 1; type < 7; type++)
     {
         int *arr = p_list->list[type];
         int no_of_pieces = p_list->no_of_pieces[type];
-        printf("type %d, np %d = ", type, no_of_pieces);
+        printf("type %d - %c, piece count %d, ", type, PIECE_SYMBOLS[type], no_of_pieces);
+        printf("indexes {");
         for(int j = 0; j < no_of_pieces; j++)
         {
-            printf("%d ", arr[j]);
+            printf("%d, ", arr[j]);
         }
+        printf("}");
         printf("\n");
     }
 }
@@ -905,11 +991,121 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
     game->last_move = NULL;
 }
 
+void make_move(struct chess_game *game, struct move *mv)
+{
+    int *board = game->board;
+    game->last_move = mv;
+    int src = mv->src;
+    int dest = mv->dest;
+    int turn = game->turn;
+
+    struct piece_list *turn_piece_list, *opposite_piece_list;
+    if(turn == WHITE)
+    {
+        turn_piece_list = &game->white_piece_list;
+        opposite_piece_list = &game->black_piece_list;
+    }
+    else
+    {
+        turn_piece_list = &game->black_piece_list;
+        opposite_piece_list = &game->white_piece_list;
+    }
+
+    int move_type = mv->type;
+    if(move_type == QUIET_MOVE || move_type == DOUBLE_PAWN_PUSH)
+    {
+        update_piece_index(turn_piece_list, piece_type(board[src]), mv);
+        board[dest] = board[src];
+        board[src] = 0;
+    }
+    else if(move_type == CAPTURES)
+    {
+        add_captured_piece(&game->captured_piece_list, board[dest]);
+        remove_piece_index(opposite_piece_list, piece_type(board[dest]), dest);
+        update_piece_index(turn_piece_list, piece_type(board[src]), mv);
+        board[dest] = board[src];
+        board[src] = 0;
+    }
+    else if(move_type == ENPASSANT_CAPTURE)
+    {
+        if(turn == BLACK)
+        {
+            add_captured_piece(&game->captured_piece_list, board[dest + N]);
+            remove_piece_index(opposite_piece_list, PAWN, dest + N);
+            board[dest + N] = 0;
+        }
+        else
+        {
+            add_captured_piece(&game->captured_piece_list, board[dest + S]);
+            remove_piece_index(opposite_piece_list, PAWN, dest + S);
+            board[dest + S] = 0;
+        }
+        update_piece_index(turn_piece_list, piece_type(board[src]), mv);
+        board[dest] = board[src];
+        board[src] = 0;
+    }
+    else if(move_type == KING_CASTLE)
+    {
+        int king = board[src];
+        int rook = board[src + 3 * E];
+        update_piece_index(turn_piece_list, KING, mv);
+        struct move rook_move = {src + 3 * E, dest + W};
+        update_piece_index(turn_piece_list, ROOK, &rook_move);
+        board[dest] = king;
+        board[src] = 0;
+        board[dest + W] = rook;
+        board[src + 3 * E] = 0;
+    }
+    else if(move_type == QUEEN_CASTLE)
+    {
+        int king = board[src];
+        int rook = board[src + 4 * W];
+        update_piece_index(turn_piece_list, KING, mv);
+        struct move rook_move = {src + 4 * W, dest + E};
+        update_piece_index(turn_piece_list, ROOK, &rook_move);
+        board[dest] = king;
+        board[src] = 0;
+        board[dest + E] = rook;
+        board[src + 4 * W] = 0;
+    }
+    else if((move_type & 8) == 8)
+    {
+        if((move_type & 4) == 4)//captured promotion
+        {
+            move_type = move_type & 11;//setting capture bit to 0
+            add_captured_piece(&game->captured_piece_list, board[dest]);
+            remove_piece_index(opposite_piece_list, piece_type(board[dest]), dest);
+        }
+        remove_piece_index(turn_piece_list, PAWN, src);
+        board[src] = 0;
+        if(move_type == QUEEN_PROMOTION)
+        {
+            add_piece_index(turn_piece_list, QUEEN, dest);
+            board[dest] = turn | QUEEN;
+        }
+        else if(move_type == KNIGHT_PROMOTION)
+        {
+            add_piece_index(turn_piece_list, KNIGHT, dest);
+            board[dest] = turn | KNIGHT;
+        }
+        else if(move_type == ROOK_PROMOTION)
+        {
+            add_piece_index(turn_piece_list, ROOK, dest);
+            board[dest] = turn | ROOK;
+        }
+        else
+        {
+            add_piece_index(turn_piece_list, BISHOP, dest);
+            board[dest] = turn | BISHOP;
+        }
+    }
+}
+
 int main()
 {
     struct chess_game game;
-    // char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk";
-    char fen_string[] = "8/6P1/8/8/8/8/8/8 w KQk";
+    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq";
+    // char fen_string[] = "8/6P1/8/8/8/8/8/8 w KQk";
 
     struct fen fn;
     init_fen(&fn, fen_string);
@@ -917,9 +1113,9 @@ int main()
     display_name_board(game.board);
     printf("%s\n", game.fen);
     display_piece_list(&game.white_piece_list);
-    display_piece_list(&game.black_piece_list);
+    // display_piece_list(&game.black_piece_list);
     struct queue* q = generate_moves(&game);
-    display_queue(q);
+    // display_queue(q);
     free_queue(q);
     return 0;
 }
