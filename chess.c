@@ -20,6 +20,9 @@ struct fen
     int turn;
     int white_castle;
     int black_castle;
+    int en_passant;
+    int half_moves;
+    int full_moves;
 };
 
 struct chess_game
@@ -851,10 +854,10 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
                 return;
             }
             int last_move_type = last_move->type;
-            int last_dest = last_move->dest;
-            int last_fle = file(last_dest);
             if(last_move_type == DOUBLE_PAWN_PUSH)
             {
+                int last_dest = last_move->dest;
+                int last_fle = file(last_dest);
                 if(fle < 7 && last_fle > 0 && last_dest + W == position)
                 {
                     enqueue(q, init_node(init_move(position, position + NE, ENPASSANT_CAPTURE)));
@@ -901,10 +904,10 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
                 return;
             }
             int last_move_type = last_move->type;
-            int last_dest = last_move->dest;
-            int last_fle = file(last_dest);
             if(last_move_type == DOUBLE_PAWN_PUSH)
             {
+                int last_dest = last_move->dest;
+                int last_fle = file(last_dest);
                 if(fle < 7 && last_fle > 0 && last_dest + W == position)
                 {
                     enqueue(q, init_node(init_move(position, position + SE, ENPASSANT_CAPTURE)));
@@ -918,24 +921,100 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
     }
 }
 
-void init_fen(struct fen *fn, char *fen_string)
+int en_passant_position(char *pgn)
 {
-    char *piece_placement = fn->piece_placement;
+    int rnk = pgn[1] - '0' - 1;
+    int fle = pgn[0] - 'a';
+    return rnk * 8 + fle;
+}
 
-    int piece_index = 0;
-    for(; fen_string[piece_index] != '\0' && fen_string[piece_index] != ' '; piece_index++)
+void free_strings(char **strings, int len)
+{
+    for(int i = 0; i < len; i++)
     {
-        piece_placement[piece_index] =  fen_string[piece_index];
+        free(strings[i]);
     }
-    piece_placement[piece_index] = '\0';
+}
 
-    if(fen_string[piece_index] == '\0')
+void copy_string_range(char *dest, char *source, int start, int end)
+{
+    int index = 0;
+    for(int i = start; i <= end; i++)
     {
-        fn->turn = WHITE;
-        return;
+        dest[index++] = source[i];
+    }
+    dest[index]= '\0';
+}
+
+void string_cpy(char *dest, char *source)
+{
+    int i;
+    for(i = 0; source[i] != '\0'; i++)
+    {
+        dest[i] = source[i];
+    }
+    dest[i] = '\0';
+}
+
+int to_number(char *string)
+{
+    int num = 0;
+
+    for(int i = 0; string[i] != '\0'; i++)
+    {
+        num = num * 10 + string[i] - '0';
+    }
+    return num;
+}
+
+int init_fen(struct fen *fn, char *fen_string)
+{
+    char *strings[6];
+    for(int string = 0; string < 6; string++)
+    {
+        strings[string] = NULL;
     }
 
-    char turn = fen_string[++piece_index];
+    int string_count = 0;
+    int start = 0;
+    int i;
+
+    //tokenizing string
+    for(i = 0; fen_string[i] != '\0'; i++)
+    {
+        if(fen_string[i] == ' ')
+        {
+            strings[string_count] = (char *)malloc(sizeof(char) * (i - start) + 1);
+            if(strings[string_count] == NULL)
+            {
+                free_strings(strings, 6);
+                return 0;
+            }
+            copy_string_range(strings[string_count], fen_string, start, i - 1);
+            string_count++;
+            start = i + 1;
+        }
+    }
+    
+    strings[string_count] = (char *)malloc(sizeof(char) * (i - start) + 1);
+    if(strings[string_count] == NULL)
+    {
+        free_strings(strings, 6);
+        return 0;
+    }
+
+    copy_string_range(strings[string_count], fen_string, start, i - 1);
+    string_count++;
+    
+    if(string_count != 6)
+    {
+        free_strings(strings, 6);
+        return 0;
+    }
+
+    string_cpy(fn->piece_placement, strings[0]);
+
+    char turn = strings[1][0];
     
     if(turn == 'b')
     {
@@ -946,30 +1025,29 @@ void init_fen(struct fen *fn, char *fen_string)
         fn->turn = WHITE;
     }
 
-    piece_index += 2;
-
-    if(fen_string[piece_index] == '-')
+    if(strings[2][0] == '-')
     {
         fn->black_castle = fn->white_castle = 0;
     }
     else
     {
+        char *castling = strings[2];
         int black_castle = 0, white_castle = 0;
-        for(; fen_string[piece_index] != '\0' && fen_string[piece_index] != ' '; piece_index++)
+        for( i = 0; castling[i] != '\0'; i++)
         {
-            if(fen_string[piece_index] == 'K')
+            if(castling[i] == 'K')
             {
                 white_castle = white_castle | 2;
             }
-            else if(fen_string[piece_index] == 'Q')
+            else if(castling[i] == 'Q')
             {
                 white_castle = white_castle | 1;
             }
-            else if(fen_string[piece_index] == 'k')
+            else if(castling[i] == 'k')
             {
                 black_castle = black_castle | 2;
             }
-            else if(fen_string[piece_index] == 'q')
+            else if(castling[i] == 'q')
             {
                 black_castle = black_castle | 1;
             }
@@ -977,6 +1055,20 @@ void init_fen(struct fen *fn, char *fen_string)
         fn->black_castle = black_castle;
         fn->white_castle = white_castle;
     }
+
+    if(strings[3][0] == '-')
+    {
+        fn->en_passant = -1;
+    }
+    else
+    {
+        fn->en_passant = en_passant_position(strings[3]);
+    }
+    fn->half_moves = to_number(strings[4]);
+    fn->full_moves = to_number(strings[5]);
+
+    free_strings(strings, 6);
+    return 1;
 }
 
 void init_chess_game(struct chess_game *game, struct fen *fn)
@@ -988,7 +1080,27 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
     init_board_from_fen(game->board, fn->piece_placement);
     init_piece_list(game);
     generate_fen(game);
-    game->last_move = NULL;
+    if(fn->en_passant == -1)
+    {
+        game->last_move = NULL;
+    }
+    else
+    {
+        int back_direction;
+        int front_direction;
+        if(game->turn == BLACK)
+        {
+            back_direction = N;
+            front_direction = S;
+        }
+        else
+        {
+            back_direction = S;
+            front_direction = N;
+        }
+
+        game->last_move = init_move(fn->en_passant + back_direction, fn->en_passant + front_direction, DOUBLE_PAWN_PUSH);
+    }
 }
 
 void make_move(struct chess_game *game, struct move *mv)
@@ -1104,10 +1216,11 @@ void make_move(struct chess_game *game, struct move *mv)
 int main()
 {
     struct chess_game game;
-    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq";
-    // char fen_string[] = "8/6P1/8/8/8/8/8/8 w KQk";
+    // char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq";
+    char fen_string[] = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3";
 
     struct fen fn;
+
     init_fen(&fn, fen_string);
     init_chess_game(&game, &fn);
     display_name_board(game.board);
