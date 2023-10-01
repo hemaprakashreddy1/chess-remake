@@ -32,10 +32,12 @@ struct chess_game
     char fen[100];
     int white_castle;
     int black_castle;
+    int half_moves;
+    int full_moves;
     struct piece_list white_piece_list;
     struct piece_list black_piece_list;
     int distance_to_borders[64][8];
-    struct move *last_move;
+    int en_passant;
     struct captured_pieces captured_piece_list;
 };
 
@@ -429,7 +431,24 @@ void generate_fen(struct chess_game *game)
             fen[fen_index++] = 'q';
         }
     }
+    fen[fen_index++] = ' ';
+    if(game->en_passant == -1)
+    {
+        fen[fen_index++] = '-';
+    }
+    else
+    {
+        int position = game->en_passant;
+        char rnk = rank(position) + 1 + '0';
+        char fle = file(position) + 'a';
+        fen[fen_index++] = fle;
+        fen[fen_index++] = rnk;
+    }
+    fen[fen_index++] = ' ';
 
+    fen[fen_index++] = game->half_moves + '0';
+    fen[fen_index++] = ' ';
+    fen[fen_index++] = game->full_moves + '0';
     fen[fen_index] = '\0';
 }
 
@@ -840,32 +859,31 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
 
         if(rnk == 1 && board[north] == EMPTY && board[north + N] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, north + N, DOUBLE_PAWN_PUSH)));
+            int dest = north + N;
+            enqueue(q, init_node(init_move(position, dest, DOUBLE_PAWN_PUSH)));
+            int dest_file = file(dest);
+            if(dest_file > 0  && piece_color(board[dest + W]) == BLACK && piece_type(board[dest + W]) == PAWN)
+            {
+                game->en_passant = dest + S;
+            }
+            else if(dest_file < 7  && piece_color(board[dest + E]) == BLACK && piece_type(board[dest + E]) == PAWN)
+            {
+                game->en_passant = dest + S;
+            }
         }
         else if(rnk == 6)
         {
             generate_promotion_moves(game, position, N, q);
         }
-        else if(rnk == 4)
+        else if(rnk == 4 && game->en_passant != -1)
         {
-            struct move* last_move = game->last_move;
-            if(last_move == NULL)
+            if(fle < 7 && position + NE == game->en_passant)
             {
-                return;
+                enqueue(q, init_node(init_move(position, game->en_passant, ENPASSANT_CAPTURE)));
             }
-            int last_move_type = last_move->type;
-            if(last_move_type == DOUBLE_PAWN_PUSH)
+            if(fle > 0 && position + NW == game->en_passant)
             {
-                int last_dest = last_move->dest;
-                int last_fle = file(last_dest);
-                if(fle < 7 && last_fle > 0 && last_dest + W == position)
-                {
-                    enqueue(q, init_node(init_move(position, position + NE, ENPASSANT_CAPTURE)));
-                }
-                if(fle > 0 && last_fle < 7 && last_dest + E == position)
-                {
-                    enqueue(q, init_node(init_move(position, position + NW, ENPASSANT_CAPTURE)));
-                }
+                enqueue(q, init_node(init_move(position, game->en_passant, ENPASSANT_CAPTURE)));
             }
         }
     }
@@ -890,32 +908,31 @@ void generate_pawn_moves(struct chess_game *game, int position, struct queue *q)
 
         if(rnk == 6 && board[south] == EMPTY && board[south + S] == EMPTY)
         {
-            enqueue(q, init_node(init_move(position, south + S, DOUBLE_PAWN_PUSH)));
+            int dest = south + S;
+            enqueue(q, init_node(init_move(position, dest, DOUBLE_PAWN_PUSH)));
+            int dest_file = file(dest);
+            if(dest_file > 0  && piece_color(board[dest + W]) == WHITE && piece_type(board[dest + W]) == PAWN)
+            {
+                game->en_passant = dest + N;
+            }
+            else if(dest_file < 7  && piece_color(board[dest + E]) == WHITE && piece_type(board[dest + E]) == PAWN)
+            {
+                game->en_passant = dest + N;
+            }
         }
         else if(rnk == 1)
         {
             generate_promotion_moves(game, position, S, q);
         }
-        else if(rnk == 3)
+        else if(rnk == 3 && game->en_passant != -1)
         {
-            struct move* last_move = game->last_move;
-            if(last_move == NULL)
+            if(fle < 7 && position + SE == game->en_passant)
             {
-                return;
+                enqueue(q, init_node(init_move(position, game->en_passant, ENPASSANT_CAPTURE)));
             }
-            int last_move_type = last_move->type;
-            if(last_move_type == DOUBLE_PAWN_PUSH)
+            if(fle > 0 && position + SW == game->en_passant)
             {
-                int last_dest = last_move->dest;
-                int last_fle = file(last_dest);
-                if(fle < 7 && last_fle > 0 && last_dest + W == position)
-                {
-                    enqueue(q, init_node(init_move(position, position + SE, ENPASSANT_CAPTURE)));
-                }
-                if(fle > 0 && last_fle < 7 && last_dest + E == position)
-                {
-                    enqueue(q, init_node(init_move(position, position + SW, ENPASSANT_CAPTURE)));
-                }
+                enqueue(q, init_node(init_move(position, game->en_passant, ENPASSANT_CAPTURE)));
             }
         }
     }
@@ -1076,37 +1093,18 @@ void init_chess_game(struct chess_game *game, struct fen *fn)
     game->turn = fn->turn;
     game->white_castle = fn->white_castle;
     game->black_castle = fn->black_castle;
+    game->en_passant = fn->en_passant;
+    game->half_moves = fn->half_moves;
+    game->full_moves = fn->full_moves;
     generate_steps_to_edges(game->distance_to_borders);
     init_board_from_fen(game->board, fn->piece_placement);
     init_piece_list(game);
     generate_fen(game);
-    if(fn->en_passant == -1)
-    {
-        game->last_move = NULL;
-    }
-    else
-    {
-        int back_direction;
-        int front_direction;
-        if(game->turn == BLACK)
-        {
-            back_direction = N;
-            front_direction = S;
-        }
-        else
-        {
-            back_direction = S;
-            front_direction = N;
-        }
-
-        game->last_move = init_move(fn->en_passant + back_direction, fn->en_passant + front_direction, DOUBLE_PAWN_PUSH);
-    }
 }
 
 void make_move(struct chess_game *game, struct move *mv)
 {
     int *board = game->board;
-    game->last_move = mv;
     int src = mv->src;
     int dest = mv->dest;
     int turn = game->turn;
@@ -1216,8 +1214,8 @@ void make_move(struct chess_game *game, struct move *mv)
 int main()
 {
     struct chess_game game;
-    // char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq";
-    char fen_string[] = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3";
+    char fen_string[] =  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    // char fen_string[] = "8/8/8/8/p7/8/8/8 b KQkq - 0 3";
 
     struct fen fn;
 
